@@ -239,7 +239,68 @@ let remove_remove () =
     Atomic.final(fun () ->
       let items = Bst.to_list bst in 
       Atomic.check (fun () -> List.length items = 0) ;
-      Atomic.check (fun () -> !r1 + !r2 = 8) ;
+      Atomic.check (fun () -> !r1 + !r2 = siz) ;
+    )
+  )
+
+let remove_insert () = 
+  Atomic.trace (fun () -> 
+    let bst = Bst.create ~compare:Int.compare () in 
+    let keys = [|50 ; 30 ; 70 ; 40 ; 20 ; 60 ; 80 ; 10|] in 
+    let siz = 8 in 
+    for i = 0 to 5 do 
+      Bst.add bst keys.(i)
+    done ;
+    let r1 = ref 0 in 
+
+    Atomic.spawn(fun () ->
+      for i = 2 to 4 do
+        if Bst.remove bst keys.(i) then r1 := !r1 + 1
+      done) ;
+    Atomic.spawn(fun () -> 
+      for i = 0 to siz-1 do 
+        Bst.add bst keys.(i)
+      done) ;
+
+    Atomic.final(fun () ->
+      let items = Bst.to_list bst in 
+      Atomic.check (fun () -> List.sort Int.compare items = items) ;
+      Atomic.check (fun () -> List.sort_uniq Int.compare items = items) ;
+      Atomic.check (fun () -> List.mem 50 items) ;
+      Atomic.check (fun () -> List.mem 30 items) ;
+      Atomic.check (fun () -> List.mem 60 items) ;
+      Atomic.check (fun () -> List.mem 80 items) ;
+      Atomic.check (fun () -> List.mem 10 items) ;
+    )
+  )
+
+let remove_search () = 
+  Atomic.trace (fun () ->
+    let bst = Bst.create ~compare:Int.compare () in 
+    let keys = [|50 ; 30 ; 70 ; 40 ; 20 ; 60 ; 80 ; 10|] in 
+    let siz = 8 in 
+    for i = 0 to siz - 1 do
+      Bst.add bst keys.(i)
+    done ;
+
+    let found = ref false in 
+    Atomic.spawn (fun () ->
+      for i = 0 to siz - 1 do 
+        ignore(Bst.remove bst keys.(i)) ;
+        if (i mod 2 = 0) then 
+          if Bst.find bst keys.(i) then found := true 
+      done) ;
+    let list_key = Array.to_list keys in 
+    let rev_list = List.rev list_key in 
+    Atomic.spawn (fun () -> 
+      for i = 0 to siz - 1 do 
+        ignore(Bst.find bst (List.nth rev_list i))
+      done) ;
+
+    Atomic.final (fun () -> 
+      let items = Bst.to_list bst in 
+      Atomic.check(fun () -> List.length items = 0) ;
+      Atomic.check(fun () -> not(!found))  ;
     )
   )
 
@@ -257,6 +318,8 @@ let () =
           test_case "1-insert-1-remove" `Slow insert_remove ;
           test_case "1-insert-1-remove-1-search-balanced" `Slow insert_remove_search_balanced ;
           test_case "1-remove-1-remove" `Slow remove_remove ; 
+          test_case "1-remove-1-insert" `Slow remove_insert ;
+          test_case "1-remove-1-search" `Slow remove_search ;
         ]
       ) ;
     ]
