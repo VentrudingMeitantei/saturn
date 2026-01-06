@@ -122,11 +122,11 @@ let rec inorder_helper root =
         let rlist = if r then [] else inorder_helper right in
         llist @ mlist @ rlist
 
-let _to_list tree _printfn = 
+let to_list tree _printfn = 
   match tree with {root;_} -> inorder_helper root
 
 let print_inorder root _printfn = 
-   let list = _to_list root _printfn in
+   let list = to_list root _printfn in
    let rec printer list _printfn = 
      match list with
      | [] -> ()
@@ -286,7 +286,7 @@ let seek (key : 'elt) (srecord : 'elt seek_record ref) (tree : 'elt t)  =
   end
 
 (* let debug () *)
-let _find (tree : 'elt t) (key : 'elt) (_printfn : 'elt -> unit) =
+let search (tree : 'elt t) (key : 'elt) (_printfn : 'elt -> unit) =
   begin
     let my_srecord = ref {last_edge = Null_edge; plast_edge = Null_edge; inject_edge = Null_edge} 
     in seek key my_srecord tree;
@@ -417,7 +417,7 @@ let find_smallest (tree: 'elt t) (_printfn : 'elt -> unit) =
   !retval
  end
 
-let rec _add (tree: 'elt t) (key:'elt) (_printfn: 'elt -> unit) = 
+let rec add (tree: 'elt t) (key:'elt) (_printfn: 'elt -> unit) = 
    let out_flag = ref true in 
   let retval = ref false in
   let target_record : 'elt seek_record ref = ref {last_edge = Null_edge ; plast_edge = Null_edge ; inject_edge = Null_edge} in 
@@ -719,7 +719,7 @@ begin
     begin 
       match (Domain.DLS.get tree.my_state).target_edge with 
       | Null_edge -> raise (failwith "Null edge rms1")
-      | Edge {parent = _ ; child ; which = _ } -> let (_ , _ , _ , _ , childnode) = Atomic.get child in ref childnode
+      | Edge {parent = _ ; child ; which = _ } -> let (_ , _ , _ , _ , childnode) = Atomic.get child in childnode
     end in 
     let seekrec = (Domain.DLS.get tree.my_state).succ_record in 
     let succ_edge = ref seekrec.last_edge in 
@@ -733,11 +733,12 @@ begin
         end
       end in
     (*!!!!!!!!!!!!!!!!!!!!!!!!!!!THIS IS NOT PERMANENT I REPLACED <> WITH NOT ==!!!!!!!!!!!!!!!!!!!!!!!!!*)
-    if not (p) || not (address == !node1) then 
+    if not (p) || not (address == node1) then 
       begin
-        begin match !node1 with 
+        begin match node1 with 
         | Null -> raise (failwith "Null node rms4")
-        | Node {mkey  ; lchild ; rchild  ; replace = _} -> ignore(node1 := (Node {mkey ; lchild ; rchild ; replace = true}))
+        (* | Node {mkey  ; lchild ; rchild  ; replace = _} -> ignore(node1 := (Node {mkey ; lchild ; rchild ; replace = true})) *)
+        | Node n -> n.replace <- true
         end ;
         update_mode tree ;
         retflag := true 
@@ -746,7 +747,7 @@ begin
     else 
       begin 
         ignore(mark_child_edge tree Right _printfn) ; 
-        begin match !node1 with 
+        begin match node1 with 
         | Null -> raise (failwith "Null node rms4")
         | Node {mkey = _  ; lchild ; rchild  ; replace = _} -> 
           begin match !succ_edge with 
@@ -756,7 +757,12 @@ begin
             | Null -> raise (failwith "Null node rms6")
             | Node {mkey = (_ , mkey) ; lchild = _ ; rchild = _ ; replace = _} -> 
               (* (node1 := Atomic.make (Node {mkey = (true , mkey) ; lchild ; rchild ; replace = true})); *)
-              ignore(node1 := (Node {mkey = (true , mkey) ; lchild ; rchild ; replace = true}))
+              (
+                match node1 with
+                | Null -> raise (failwith "Won't reach here")
+                | Node nd -> nd.replace <- true; match nd.mkey with (_, _) -> nd.mkey <- (true, mkey)
+              )
+              (* ignore(node1 := (Node {mkey = (true , mkey) ; lchild ; rchild ; replace = true})) *)
             end;
           end 
         end ;
@@ -768,9 +774,9 @@ begin
             | Edge {parent ; child = _ ; which = _} -> let (_ , _ , _ , _ , parent_node) = Atomic.get parent in parent_node
             end in
           let dflag = 
-          if succ_edge_parent == !node1 then true else false in 
+          if succ_edge_parent == node1 then true else false in 
           let which = 
-          if succ_edge_parent == !node1 then Right else Left in 
+          if succ_edge_parent == node1 then Right else Left in 
           (*!!!!!!!!! I DIDN'T USE THE i SHOULD SEE !!!!!!!!!!*)
           let (_ , _i , _ , _ , _) = 
             begin match succ_edge_parent with 
@@ -856,9 +862,10 @@ begin
           end
           else ()
         done ;
-        begin match !node1 with 
+        begin match node1 with 
           | Null -> raise(failwith "Null node rms13")
-          | Node {mkey ; lchild ; rchild ; replace = _} -> ignore(node1 := (Node {mkey ; lchild ; rchild ; replace = true}))
+          (* | Node {mkey ; lchild ; rchild ; replace = _} -> ignore(node1 := (Node {mkey ; lchild ; rchild ; replace = true})) *)
+          | Node nd -> nd.replace <- true
         end ;
         update_mode tree ;
       end;
@@ -1046,7 +1053,7 @@ and help_successor_node (tree : 'elt t) (help_edge : 'elt edge) (_printfn : 'elt
   remove_successor tree _printfn;
 end
  
-let _remove (tree : 'elt t) (key : 'elt) (_printfn : 'elt -> unit)= 
+let remove (tree : 'elt t) (key : 'elt) (_printfn : 'elt -> unit)= 
   begin
     (* print_endline "============entered remove============"; *)
     (Domain.DLS.get tree.my_state).target_key <- Some key ; 
@@ -1143,10 +1150,10 @@ let _remove (tree : 'elt t) (key : 'elt) (_printfn : 'elt -> unit)=
     !retval
   end
 
-let add tree elt = ignore(_add tree elt (fun _ -> ()))
+let add tree elt = ignore(add tree elt (fun _ -> ()))
 
-let remove tree elt = _remove tree elt (fun _ -> ())
+let remove tree elt = remove tree elt (fun _ -> ())
 
-let find tree elt = _find tree elt (fun _ -> ())
+let find tree elt = search tree elt (fun _ -> ())
 
-let to_list tree = _to_list tree (fun _ -> ())
+let to_list tree = to_list tree (fun _ -> ())
