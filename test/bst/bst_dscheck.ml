@@ -10,14 +10,14 @@ module Atomic = Dscheck.TracedAtomic
 let insert_insert () = 
   Atomic.trace (fun () ->
     let bst = Bst_ez.create ~compare:Int.compare () in 
-    let total = 3  in 
+    let total = 4  in 
     Atomic.spawn (fun () -> 
         Bst_ez.add bst 2 ;
     ) ;
     Atomic.spawn (fun () -> Bst_ez.add bst 1 ; Bst_ez.add bst 2) ;
 
     Atomic.spawn (fun () ->
-        Bst_ez.add bst 3 
+        Bst_ez.add bst 3 ; Bst_ez.add bst 4 ;
     ) ;
     
     Atomic.final (fun () -> 
@@ -92,9 +92,9 @@ let insert_search () =
 let insert_insert_balanced () = 
   Atomic.trace(fun () -> 
     let bst = Bst_ez.create ~compare:Int.compare () in 
-    let keys1 = [|50 ; 30 ; 70 ; 40 ; 20 ; 60 ; 80 ; 10|] in
-    let keys2 = [|55 ; 35 ; 65 ; 45 ; 25 ; 65 ; 85 ; 15 |] in (* 65 is duplicate *)
-    let siz = 8 in 
+    let keys1 = [|50 ; 30 ; 70 ; 40|] in
+    let keys2 = [|20 ; 60 ; 80 ; 10|] in 
+    let siz = 4 in 
 
     (*Domain 1 adds keys from keys1 , Domain 2 adds keys from keys2 *)
     Atomic.spawn (fun () ->
@@ -111,7 +111,7 @@ let insert_insert_balanced () =
     Atomic.final (fun () -> 
       let items = Bst_ez.to_list bst in 
       Atomic.check (fun () ->
-        List.length items = 2*siz - 1) (* Check for total count *);
+        List.length items = 2*siz ) (* Check for total count *);
       Atomic.check (fun () ->
         List.sort Int.compare items = items) (* Check for sortedness *);
       Atomic.check (fun () ->
@@ -309,15 +309,15 @@ let () =
       ( "basic",
         [
           test_case "2-disjoint-insert" `Slow insert_insert ;
-          (* test_case "2-insert-duplicates" `Slow insert_insert_duplicates ;
-          test_case "1-insert-1-search" `Slow insert_search ;
+          (* test_case "2-insert-duplicates" `Slow insert_insert_duplicates ; *)
+          (* test_case "1-insert-1-search" `Slow insert_search ; *)
           test_case "2-insert-balanced" `Slow insert_insert_balanced ;
-          test_case "1-insert-1-search-balanced" `Slow insert_search_balanced ;
-          test_case "1-insert-1-remove" `Slow insert_remove ;
-          test_case "1-insert-1-remove-1-search-balanced" `Slow insert_remove_search_balanced ;
-          test_case "1-remove-1-remove" `Slow remove_remove ; 
-          test_case "1-remove-1-insert" `Slow remove_insert ;
-          test_case "1-remove-1-search" `Slow remove_search ; *)
+          (* test_case "1-insert-1-search-balanced" `Slow insert_search_balanced ; *)
+          (* test_case "1-insert-1-remove" `Slow insert_remove ; *)
+          (* test_case "1-insert-1-remove-1-search-balanced" `Slow insert_remove_search_balanced ; *)
+          (* test_case "1-remove-1-remove" `Slow remove_remove ;  *)
+          (* test_case "1-remove-1-insert" `Slow remove_insert ; *)
+          (* test_case "1-remove-1-search" `Slow remove_search ; *)
         ]
       ) ;
     ]

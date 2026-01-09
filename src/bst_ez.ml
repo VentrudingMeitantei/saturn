@@ -26,7 +26,6 @@ type 'elt t = {
   compare : 'elt -> 'elt -> int ;
   root : 'elt node ref ;
   nodeS : 'elt node ref ; 
-  srecord : 'elt seek_record Domain.DLS.key 
 }
 
 let create ~compare () = 
@@ -87,32 +86,37 @@ begin
     } ;
   } in 
 
-  let srecord = Domain.DLS.new_key (fun () -> {
+  (* let srecord = Domain.DLS.new_key (fun () -> {
     ancestor = ref nodeR ;
     successor = ref nodeS ;
     parent = ref nodeS ;
     leaf = ref nodeR ;
-  }) in 
+  }) in  *)
   let tree = {
     compare = compare ;
     root = ref nodeR ;
     nodeS = ref nodeS ;
-    srecord = srecord ;
   } in tree 
 end
 let seek (key : 'elt) (tree : 'elt t) = 
 begin
   (* Initialize seek record using the sentinel nodes *)
-  (Domain.DLS.get tree.srecord).ancestor <- tree.root ;
+  (* (Domain.DLS.get tree.srecord).ancestor <- tree.root ;
   (Domain.DLS.get tree.srecord).successor <- tree.nodeS ;
-  (Domain.DLS.get tree.srecord).parent <- tree.nodeS ;  
+  (Domain.DLS.get tree.srecord).parent <- tree.nodeS ;   *)
+  let srecord = {
+    ancestor = tree.root ;
+    successor = tree.nodeS ;
+    parent = tree.nodeS ;
+    leaf = Option.get (Atomic.get !(tree.nodeS).lchild).address ;
+  } in 
 
-  let left = Atomic.get !(tree.nodeS).lchild in 
-  (Domain.DLS.get tree.srecord).leaf <- Option.get left.address ;
+  (* let left = Atomic.get !(tree.nodeS).lchild in 
+  (Domain.DLS.get tree.srecord).leaf <- Option.get left.address ; *)
 
   (* Initialize other variables used in the traversal*)
-  let parent_field = ref (Atomic.get !((Domain.DLS.get tree.srecord).parent).lchild) in 
-  let curr_field = ref (Atomic.get !((Domain.DLS.get tree.srecord).leaf).lchild) in 
+  let parent_field = ref (Atomic.get !((srecord).parent).lchild) in 
+  let curr_field = ref (Atomic.get !((srecord).leaf).lchild) in 
   let curr = ref !curr_field.address in 
   while !curr <> None do 
     (* Move down the tree, check if the edge from the (current) parent node in the access path is tagged *)
@@ -120,13 +124,13 @@ begin
     if not !parent_field.tag then       
       (* Found an untagged edge in the access path, advance ancestor and successor pointers *)
     begin
-      (Domain.DLS.get tree.srecord).ancestor <- (Domain.DLS.get tree.srecord).parent ;
-      (Domain.DLS.get tree.srecord).successor <- (Domain.DLS.get tree.srecord).leaf ;
+      (srecord).ancestor <- (srecord).parent ;
+      (srecord).successor <- (srecord).leaf ;
     end ;
 
     (* Advance parent and leaf pointers *)
-    (Domain.DLS.get tree.srecord).parent <- (Domain.DLS.get tree.srecord).leaf ;
-    (Domain.DLS.get tree.srecord).leaf <- Option.get !curr ;
+    (srecord).parent <- (srecord).leaf ;
+    (srecord).leaf <- Option.get !curr ;
 
     (* Update other variables used in traversal *)
     parent_field := !curr_field ;
@@ -140,15 +144,16 @@ begin
     else curr_field := Atomic.get !(Option.get !curr).rchild ;
 
     curr := !curr_field.address
-  done
+  done ;
+  srecord ;
 end
 
 let search (tree : 'elt t) (key : 'elt) = 
 begin
 
-  seek key tree ; 
+  let sR = seek key tree in  
   let cmpval = 
-    match !((Domain.DLS.get tree.srecord).leaf).key with 
+    match !(sR.leaf).key with 
     | None -> false
     | Some v -> (tree.compare v key = 0)
   in cmpval 
@@ -159,9 +164,9 @@ let cleanup (key : 'elt) (tree : 'elt t) = ()
 let insert (tree : 'elt t) (key : 'elt) = 
 begin
   let rec loop () = 
-    seek key tree ; 
-    let par = (Domain.DLS.get tree.srecord).parent in 
-    let leaf = (Domain.DLS.get tree.srecord).leaf in 
+    let sR = seek key tree in 
+    let par = (sR).parent in 
+    let leaf = (sR).leaf in 
     let cmpval = 
       begin match !leaf.key with 
         | None -> false 
@@ -182,8 +187,8 @@ begin
         (* Preliminary value for CAS *)
         let old_val = Atomic.get child_addr in 
         
-        if old_val.address <> Some leaf then loop () 
-        else
+        (* if old_val.address <> Some leaf then loop () 
+        else *)
           begin
 
             let new_leaf = ref ({
